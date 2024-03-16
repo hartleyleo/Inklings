@@ -59,14 +59,12 @@ enum InklingType {
 
 // Example of Inkling thread info data type
 struct InklingInfo {
- InklingType type;
- // location of the inkling
- int row;
- int col;
- // in which direction is the inkling going?
- TravelDirection dir;
- // initialized to true, set to false if terminates
- bool isLive;
+    int id;  // Unique identifier for each inkling
+    InklingType type;  // Type of the inkling (Red, Green, Blue)
+    int row;  // Current row position in the grid
+    int col;  // Current column position in the grid
+    TravelDirection dir;  // Current direction of movement
+    bool isLive;  // Status to check if the inkling is still active
 };
 
 

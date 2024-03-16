@@ -43,6 +43,7 @@
 void displayGridPane(void);
 void displayStatePane(void);
 void initializeApplication(void);
+std::string directionToString(TravelDirection dir);
 void threadFunction(InklingInfo* inkling);
 void getNewDirection(InklingInfo* inkling);
 bool checkIfInCorner(InklingInfo* inkling);
@@ -357,69 +358,48 @@ std::string colorToString(InklingType type) {
     }
 }
 void initializeApplication(void) {
-  // Allocate the grid
-  grid = new int*[NUM_ROWS];
-  for (int i = 0; i < NUM_ROWS; i++) {
-    grid[i] = new int[NUM_COLS];
-    // Initialize grid cells to 0 (assuming 0 represents empty)
-    std::fill(grid[i], grid[i] + NUM_COLS, 0);
-  }
-
-  // Setup random number generation
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distRow(1, NUM_ROWS - 2); // Avoid corners
-  std::uniform_int_distribution<> distCol(1, NUM_COLS - 2); // Avoid corners
-  std::uniform_int_distribution<> colorDist(0, 2); // For inkling color
-
-  // Initialize inklings with random positions, ensuring no overlap and not in a corner
-  for (int i = 0; i < MAX_NUM_TRAVELER_THREADS; ++i) {
-    bool placed = false;
-    while (!placed) {
-      int row = distRow(gen);
-      int col = distCol(gen);
-      // Check if the chosen position is already occupied
-      auto it = std::find_if(info.begin(), info.end(), [row, col](const InklingInfo& inkling) {
-        return inkling.row == row && inkling.col == col;
-      });
-      // If not occupied, place a new inkling
-      if (it == info.end()) {
-        InklingInfo newInkling = {
-          static_cast<InklingType>(colorDist(gen)), // Random color/type
-          row, col, // Random position avoiding corners
-          static_cast<TravelDirection>(gen() % 4), // Random initial direction
-          true // Inkling is initially alive
-        };
-        info.push_back(newInkling); // Add to the list of inklings
-        placed = true;
-      }
+    grid = new int*[NUM_ROWS];
+    for (int i = 0; i < NUM_ROWS; i++) {
+        grid[i] = new int[NUM_COLS]{0};  // Initialize grid cells to 0
     }
-  }
 
-  // Create logFolder directory
-  std::filesystem::path logFolderPath = "./logFolder";
-  std::filesystem::create_directory(logFolderPath);
-  chmod(logFolderPath.c_str(), 0755);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distRow(1, NUM_ROWS - 2);
+    std::uniform_int_distribution<> distCol(1, NUM_COLS - 2);
+    std::uniform_int_distribution<> colorDist(0, 2);
 
-  for (size_t i = 0; i < info.size(); ++i) {
-      // Construct log filename for each inkling
-      std::string filename = logFolderPath / ("inkling" + std::to_string(i + 1) + ".txt");
+    std::filesystem::path logFolderPath = "./logFolder";
+    std::filesystem::create_directory(logFolderPath);
+    chmod(logFolderPath.c_str(), 0755);
 
-      // Open log file for writing
-      std::ofstream logFile(filename);
-      if (!logFile) {
-          std::cerr << "Failed to open log file for inkling " << (i + 1) << std::endl;
-          continue;
-      }
+    for (int i = 0; i < MAX_NUM_TRAVELER_THREADS; ++i) {
+        int row, col;
+        do {
+            row = distRow(gen);
+            col = distCol(gen);
+        } while (std::any_of(info.begin(), info.end(), [row, col](const InklingInfo& inkling) {
+            return inkling.row == row && inkling.col == col;
+        }));
 
-      // Log the initial position and color
-      logFile << getCurrentTimestamp() << ",inkling" << (i + 1) << "," << colorToString(info[i].type)
-              << ",row" << info[i].row << ",col" << info[i].col << std::endl;
+        InklingInfo newInkling = {
+            i + 1,  // Assign ID starting from 1
+            static_cast<InklingType>(colorDist(gen)),
+            row, col,
+            static_cast<TravelDirection>(gen() % 4),
+            true
+        };
 
-      // Close the log file
-      logFile.close();
-  }
+        info.push_back(newInkling);
 
+        std::string filename = logFolderPath / ("inkling" + std::to_string(newInkling.id) + ".txt");
+        std::ofstream logFile(filename);
+        logFile << getCurrentTimestamp() << ",inkling" << newInkling.id << "," 
+                << colorToString(newInkling.type) << ",row" << newInkling.row 
+                << ",col" << newInkling.col << std::endl;
+        logFile.close();
+        chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+    }
 }
 
 
@@ -460,6 +440,16 @@ bool checkEnoughInk(InklingInfo* inkling) {
       return blueLevel >= 1;
   }
   return false;
+}
+
+std::string directionToString(TravelDirection dir) {
+    switch (dir) {
+        case NORTH: return "north";
+        case SOUTH: return "south";
+        case EAST: return "east";
+        case WEST: return "west";
+        default: return "unknown";
+    }
 }
 
 // Thread function for the inkling
@@ -566,6 +556,10 @@ bool checkEnoughInk(InklingInfo* inkling) {
 
 // }
 void threadFunction(InklingInfo* inkling) {
+    std::string logFilePath = "./logFolder/inkling" + std::to_string(inkling->id) + ".txt";
+    std::ofstream logFile(logFilePath, std::ios_base::app);  // Open in append mode
+
+
     while (inkling->isLive) {
 
       // Generate a random number of steps
@@ -626,6 +620,12 @@ void threadFunction(InklingInfo* inkling) {
       }
 
       for (int i = 0; i < step_count && checkEnoughInk(inkling) && inkling->isLive; i++) {
+        
+        // Log the movement before actually moving to capture the intent
+        logFile << getCurrentTimestamp() << ",inkling" << inkling->id << "," 
+                << directionToString(inkling->dir) << ",row" << inkling->row 
+                << ",col" << inkling->col << std::endl;
+
         // Move inkling
         moveInkling(inkling);
         
@@ -654,6 +654,12 @@ void threadFunction(InklingInfo* inkling) {
       getNewDirection(inkling);
       std::this_thread::sleep_for(std::chrono::microseconds(inklingSleepTime));
     }
+
+    // Log the termination after exiting the loop, ensuring it's always logged
+    logFile << getCurrentTimestamp() << ",inkling" << inkling->id << ",terminated\n";
+
+    logFile.close();  // Close the log file when the inkling stops moving (is no longer live)
+
 }
 
 // Function to get a new random direction (implementation left for you)

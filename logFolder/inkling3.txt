@@ -1,1 +1,7 @@
-04:08:20.470,inkling3,green,row5,col6
+05:06:00.061,inkling3,blue,row5,col4
+05:06:00.063,inkling3,east,row5,col4
+05:06:00.063,inkling3,east,row5,col5
+05:06:00.063,inkling3,east,row5,col6
+05:06:01.068,inkling3,south,row5,col7
+05:06:01.068,inkling3,south,row6,col7
+05:06:02.074,inkling3,terminated
