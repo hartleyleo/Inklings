@@ -31,9 +31,7 @@ std::mutex mtx; // mutex for thread-safe control over recursiveDepth
 //	ink access functions.
 //---------------------------------------------------------------------------
 
-bool acquireRedInk(int theRed);
-bool acquireGreenInk(int theGreen);
-bool acquireBlueInk(int theBlue);
+bool acquireInk(int theInk, std::mutex &lock, int inkLevel);
 bool refillRedInk(int theRed);
 bool refillGreenInk(int theGreen);
 bool refillBlueInk(int theBlue);
@@ -167,9 +165,28 @@ void drawGridAndInklingsASCII(int**grid, int numRows, int numCols, std::vector<I
 					}  
 				}
 			}
-			if(!inklingFound) {
-				printCell(TextColor::BLACK, "[ ]");
-			}
+
+            // ----------------------------------------------------------
+            //      Improvement 1: Updating the displayed grid with 
+            //   color values to show where the inkling has traversed.
+            //   This is solely a visual aid for the user.
+            // ----------------------------------------------------------
+			if (!inklingFound && grid != nullptr && grid[row] != nullptr) {
+				switch (grid[row][col]) {
+                    case 1:
+                        printCell(TextColor::RED, "[ ]");
+                        break;
+                    case 2:
+                        printCell(TextColor::GREEN, "[ ]");
+                        break;
+                    case 3:
+                        printCell(TextColor::BLUE, "[ ]");
+                        break;
+                    default:
+                        printCell(TextColor::BLACK, "[ ]");
+                        break;
+                }
+            } 
         }
         std::cout << std::endl; // create new row
     }
@@ -324,6 +341,8 @@ void myEventLoop(int val) {
 
     // start the keyboard event listener thread
     // std::thread listenerThread(keyListener); // Hmmm, what does this do?
+
+    // listenerThread.join();
 
     // to track recursion depth
     static std::atomic<int> recursiveDepth = 0;

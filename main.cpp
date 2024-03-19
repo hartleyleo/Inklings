@@ -78,9 +78,6 @@ int redLevel = 20, greenLevel = 10, blueLevel = 40;
 std::mutex redLock;
 std::mutex blueLock;
 std::mutex greenLock;
-std::mutex blueCellLock;
-std::mutex redCellLock;
-std::mutex greenCellLock;
 std::mutex ink_mutex;
 
 // ink producer sleep time (in microseconds)
@@ -117,53 +114,23 @@ void displayStatePane(void) {
 }
 
 //------------------------------------------------------------------------
-//	These are the functions that would be called by a inkling thread in
-//	order to acquire red/green/blue ink to trace its trail.
-//	You *must* synchronize access to the ink levels (C++ lock and unlock)
+//	   Improvement 2: The acquire ink functions can be condensed into one 
+// acquireInk function.
 //------------------------------------------------------------------------
-// You probably want to edit these...
-bool acquireRedInk(int theRed) {
 
-  // Lock the respective ink
-  redLock.lock();
-  bool ok = false;
+// Kept the improvement to show reasoning behind it
+bool acquireInk(int theInk, std::mutex& lock, int inkLevel) {
+	// Lock the mutex
+	lock.lock();
+	bool ok = false;
 
-  if (redLevel >= theRed) {
-    redLevel -= theRed;
-    ok = true;
-  }
-
-  redLock.unlock();
-  return ok;
-}
-
-bool acquireGreenInk(int theGreen) {
-
-  // Lock the respective ink
-  greenLock.lock();
-  bool ok = false;
-
-	if (greenLevel >= theGreen) {
-		greenLevel -= theGreen;
+	if (inkLevel >= theInk) {
+		inkLevel -= theInk;
 		ok = true;
 	}
 
-  greenLock.unlock();
-	return false;
-}
-
-bool acquireBlueInk(int theBlue) {
-  // Lock the respective ink
-  blueLock.lock();
-  bool ok = false;
-
-	if (blueLevel >= theBlue) {
-		blueLevel -= theBlue;
-		ok = true;
-	}
-  
-  blueLock.unlock();
-	return false;
+	lock.unlock();
+	return ok;
 }
 
 
@@ -172,7 +139,6 @@ bool acquireBlueInk(int theBlue) {
 //	order to refill the red/green/blue ink tanks.
 //	You *must* synchronize access to the ink levels (C++ lock and unlock)
 //------------------------------------------------------------------------
-// You probably want to edit these...
 bool refillRedInk(int theRed) {
   bool ok = false;
 
@@ -319,11 +285,9 @@ void cleanupAndQuit(const std::string& msg) {
 
   // Join all inkling threads before freeing memory
 
-
-  
-  // for (auto& thread : inklingThreads) {
-  //   thread.join();
-  // }
+	//   for (auto& thread : inklingThreads) {
+	//     thread.join();
+	//   }
 
   // Deallocate grid memory
   for (int i = 0; i < NUM_ROWS; i++) {
@@ -361,6 +325,10 @@ void initializeApplication(void) {
     grid = new int*[NUM_ROWS];
     for (int i = 0; i < NUM_ROWS; i++) {
         grid[i] = new int[NUM_COLS]{0};  // Initialize grid cells to 0
+    }
+
+    if (grid[0][0] == 0) {
+      std::cout << "HELLOO" << std::endl;
     }
 
     std::random_device rd;
@@ -452,109 +420,6 @@ std::string directionToString(TravelDirection dir) {
     }
 }
 
-// Thread function for the inkling
-// void threadFunction(InklingInfo* inkling) {
-
-//   while (inkling->isLive) {
-
-//     // Generate a random number of steps
-//     std::random_device rd;
-//     std::mt19937 rn_gen(rd());
-//     std::uniform_int_distribution<> selector(1, 5); // Range for number of steps (1 to 5)
-
-//     // Variables for steps
-//     int step_count = selector(rn_gen);
-//     bool valid_path = false;
-
-//     while (!valid_path) {
-
-//       // Check valid path & update path variable to reflect a valid path
-//       switch(inkling->dir) {
-//         case NORTH:
-//           valid_path = (inkling->row - step_count >= 0) ? true : false;
-//           break;
-//         case SOUTH:
-//           valid_path = (inkling->row + step_count < NUM_ROWS - 1) ? true : false;
-//           break;
-//         case WEST:
-//           valid_path = (inkling->col - step_count >= 0) ? true : false;
-//           break;
-//         case EAST:
-//           valid_path = (inkling->col + step_count < NUM_COLS - 1) ? true : false;
-//           break;
-//       }
-
-//       // Only generate new path if the path is not valid
-//       if (!valid_path) {
-//         step_count = selector(rn_gen);
-//       }
-
-//     }
-
-//     // Loop for the chosen number of steps while there is enough ink
-//     int i = 0;
-//     while (i < step_count && checkEnoughInk(inkling) && inkling->isLive) {
-
-//       // // Lock the appropriate cell based on inkling type before update
-//       // std::lock_guard<std::mutex> lock(redCellLock);
-
-//       // switch(inkling->type) {
-//       //   case RED_TRAV:
-//       //       {
-//       //           std::lock_guard<std::mutex> redLockGuard(redCellLock);
-//       //           grid[inkling->row][inkling->col] = static_cast<int>(inkling->type);
-//       //       }
-//       //       break;
-//       //   case GREEN_TRAV:
-//       //       {
-//       //           std::lock_guard<std::mutex> greenLockGuard(greenCellLock);
-//       //           grid[inkling->row][inkling->col] = static_cast<int>(inkling->type);
-//       //       }
-//       //       break;
-//       //   case BLUE_TRAV:
-//       //       {
-//       //           std::lock_guard<std::mutex> blueLockGuard(blueCellLock);
-//       //           grid[inkling->row][inkling->col] = static_cast<int>(inkling->type);
-//       //       }
-//       //       break;
-//       // }
-
-
-//       moveInkling(inkling);
-
-//       // Check if inkling reached a corner, terminate if so
-//       if (checkIfInCorner(inkling)) {
-//         inkling->isLive = false;
-//         break;
-//       }
-
-//       // Update grid
-//       grid[inkling->row][inkling->col] = static_cast<int>(inkling->type);
-
-//       // Update ink level based on inkling type
-//       switch (inkling->type) {
-//         case RED_TRAV:
-//           redLevel -= 1;
-//           break;
-//         case GREEN_TRAV:
-//           greenLevel -= 1;
-//           break;
-//         case BLUE_TRAV:
-//           blueLevel -= 1;
-//           break;
-//       }
-
-//       i++;
-      
-//       // Get a new direction for inkling
-//       getNewDirection(inkling);
-//       std::this_thread::sleep_for(std::chrono::milliseconds(inklingSleepTime));
-
-//     }
-
-//   }
-
-// }
 void threadFunction(InklingInfo* inkling) {
     std::string logFilePath = "./logFolder/inkling" + std::to_string(inkling->id) + ".txt";
     std::ofstream logFile(logFilePath, std::ios_base::app);  // Open in append mode
@@ -562,97 +427,117 @@ void threadFunction(InklingInfo* inkling) {
 
     while (inkling->isLive) {
 
-      // Generate a random number of steps
-      std::random_device rd;
-      std::mt19937 rn_gen(rd());
-      std::uniform_int_distribution<> selector(1, 5); // Range for number of steps (1 to 5)
+		// Generate a random number of steps
+		std::random_device rd;
+		std::mt19937 rn_gen(rd());
+		std::uniform_int_distribution<> selector(1, 5); // Range for number of steps (1 to 5)
 
-      // Variables for steps
-      int step_count = selector(rn_gen);
-      bool valid_path = false;
+		// Variables for steps
+		int step_count = selector(rn_gen);
+		bool valid_path = false;
 
-      while (!valid_path) {
+		while (!valid_path) {
 
-        // Check valid path & update path variable to reflect a valid path
-        switch(inkling->dir) {
-          case NORTH:
-            valid_path = (inkling->row - step_count >= 0) ? true : false;
-            break;
-          case SOUTH:
-            valid_path = (inkling->row + step_count <= NUM_ROWS - 1) ? true : false;
-            break;
-          case WEST:
-            valid_path = (inkling->col - step_count >= 0) ? true : false;
-            break;
-          case EAST:
-            valid_path = (inkling->col + step_count <= NUM_COLS - 1) ? true : false;
-            break;
-        }
+			// Check valid path & update path variable to reflect a valid path
+			switch(inkling->dir) {
+				case NORTH:
+					valid_path = (inkling->row - step_count >= 0) ? true : false;
+					break;
+				case SOUTH:
+					valid_path = (inkling->row + step_count <= NUM_ROWS - 1) ? true : false;
+					break;
+				case WEST:
+					valid_path = (inkling->col - step_count >= 0) ? true : false;
+					break;
+				case EAST:
+					valid_path = (inkling->col + step_count <= NUM_COLS - 1) ? true : false;
+					break;
+			}
 
-        // Only generate new path if the path is not valid
-        if (!valid_path) {
+			// Only generate new path if the path is not valid
+			if (!valid_path) {
 
-          // Lower step count by 1 to ensure the path is valid
-          step_count = step_count - 1;
+				// Lower step count by 1 to ensure the path is valid
+				step_count = step_count - 1;
 
-          // If inkling is at an edge of the board, then it will flip direction to adhere to guidelines of inkling valid new direction
-          if (step_count == 0) {
-            switch (inkling->dir) {
-              case NORTH:
-                inkling->dir = SOUTH;
-                break;
-              case SOUTH:
-                inkling->dir = NORTH;
-                break;
-              case WEST:
-                inkling->dir = EAST;
-                break;
-              case EAST:
-                inkling->dir = WEST;
-                break;
-            }
+				// If inkling is at an edge of the board, then it will flip direction to adhere to guidelines of inkling valid new direction
+				if (step_count == 0) {
+					switch (inkling->dir) {
+					case NORTH:
+						inkling->dir = SOUTH;
+						break;
+					case SOUTH:
+						inkling->dir = NORTH;
+						break;
+					case WEST:
+						inkling->dir = EAST;
+						break;
+					case EAST:
+						inkling->dir = WEST;
+						break;
+					}
 
-            // Generate new step count to test new direction on
-            step_count = selector(rn_gen);
-          }
-        }
+					// Generate new step count to test new direction on
+					step_count = selector(rn_gen);
+				}
+        	}
 
-      }
+      	}
 
-      for (int i = 0; i < step_count && checkEnoughInk(inkling) && inkling->isLive; i++) {
+      	for (int i = 0; i < step_count && checkEnoughInk(inkling) && inkling->isLive; i++) {
         
-        // Log the movement before actually moving to capture the intent
-        logFile << getCurrentTimestamp() << ",inkling" << inkling->id << "," 
-                << directionToString(inkling->dir) << ",row" << inkling->row 
-                << ",col" << inkling->col << std::endl;
+			// Log the movement before actually moving to capture the intent
+			logFile << getCurrentTimestamp() << ",inkling" << inkling->id << "," 
+					<< directionToString(inkling->dir) << ",row" << inkling->row 
+					<< ",col" << inkling->col << std::endl;
 
-        // Move inkling
-        moveInkling(inkling);
-        
-        // Check if inkling reached a corner
-        if (checkIfInCorner(inkling)) {
-            inkling->isLive = false;
-            numLiveThreads -= 1;
-        }
+			// Get ink resource
+			bool isInkAcquried = false;
+			switch(inkling->type) {
+				case RED_TRAV:
+					isInkAcquried = acquireInk(1, redLock, redLevel);
+					break;
+				case GREEN_TRAV:
+					isInkAcquried = acquireInk(1, greenLock, greenLevel);
+					break;
+				case BLUE_TRAV:
+					isInkAcquried = acquireInk(1, blueLock, blueLevel);
+					break;
+			}
 
-        // Update ink level based on inkling type
-        switch (inkling->type) {
-          case RED_TRAV:
-            redLevel -= 1;
-            break;
-          case GREEN_TRAV:
-            greenLevel -= 1;
-            break;
-          case BLUE_TRAV:
-            blueLevel -= 1;
-            break;
-        }
+			if (isInkAcquried) {
 
-      }
+				// Paint the current spot based on inkling color
+				switch(inkling->type) {
+					case RED_TRAV:
+						grid[inkling->row][inkling->col] = 1;
+						break;
+					case GREEN_TRAV:
+						grid[inkling->row][inkling->col] = 2;
+						break;
+					case BLUE_TRAV:
+						grid[inkling->row][inkling->col] = 3;
+						break;
+				}
+			
+				// Move inkling to new spot
+				moveInkling(inkling);
+
+				// Check if inkling reached a corner
+				if (checkIfInCorner(inkling)) {
+					inkling->isLive = false;
+					numLiveThreads -= 1;
+				}
+
+			}
+
+    	}
       
-      // Sleep for inkling sleep time
-      getNewDirection(inkling);
-      std::this_thread::sleep_for(std::chrono::microseconds(inklingSleepTime));
+		// Get new direction after inkling has fully traveled
+		getNewDirection(inkling);
+
+		// Sleep for inkling sleep time
+		std::this_thread::sleep_for(std::chrono::microseconds(inklingSleepTime));
     }
 
     // Log the termination after exiting the loop, ensuring it's always logged
@@ -662,7 +547,7 @@ void threadFunction(InklingInfo* inkling) {
 
 }
 
-// Function to get a new random direction (implementation left for you)
+// Function to get a new random direction
 void getNewDirection(InklingInfo* inkling) {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -676,23 +561,37 @@ void getNewDirection(InklingInfo* inkling) {
     inkling->dir = newDir;
 }
 
+
+
+
+
+
+
+
+
+
 void redColorThreadFunc() {
   while (true) {
     // Simulate production time
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Adjust sleep time as needed
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // Lock access to red ink level
     std::lock_guard<std::mutex> lock(redLock);
 
+	// ----------------------------------------------------------
+	// 		Improvement 3: Capping ink levels at the MAX_LEVEL
+	//   This is done to make it actually stop the ink from 'overflowing'
+	//   its container. It ensures that MAX_LEVEL is the actual max level
+	// ----------------------------------------------------------
     // Check if red ink level is below maximum
     if (redLevel < MAX_LEVEL) {
       // Refill red ink
-      if (MAX_LEVEL - redLevel <= 10) {
+      if (MAX_LEVEL - redLevel <= REFILL_INK) {
         redLevel += MAX_LEVEL - redLevel;
       } else {
         redLevel += REFILL_INK;
       }
-      printf("Red ink refilled to %d\n", redLevel); // Optional for visual output
+      printf("Red ink refilled to %d\n", redLevel);
     }
   }
 }
@@ -700,18 +599,23 @@ void redColorThreadFunc() {
 void greenColorThreadFunc() {
   while (true) {
     // Simulate production time
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // Adjust sleep time as needed
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
     // Lock access to green ink level
     std::lock_guard<std::mutex> lock(greenLock);
 
+	// ----------------------------------------------------------
+	// 		Improvement 3: Capping ink levels at the MAX_LEVEL
+	//   This is done to make it actually stop the ink from 'overflowing'
+	//   its container. It ensures that MAX_LEVEL is the actual max level
+	// ----------------------------------------------------------
     if (greenLevel < MAX_LEVEL) {
-      if (MAX_LEVEL - greenLevel <= 10) {
+      if (MAX_LEVEL - greenLevel <= REFILL_INK) {
         greenLevel += MAX_LEVEL - greenLevel;
       } else {
         greenLevel += REFILL_INK;
       }
-      printf("Green ink refilled to %d\n", greenLevel); // Optional for visual output
+      printf("Green ink refilled to %d\n", greenLevel);
     }
   }
 }
@@ -719,18 +623,23 @@ void greenColorThreadFunc() {
 void blueColorThreadFunc() {
   while (true) {
     // Simulate production time
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000)); // Adjust sleep time as needed
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     // Lock access to blue ink level
     std::lock_guard<std::mutex> lock(blueLock);
 
+	// ----------------------------------------------------------
+	// 		Improvement 3: Capping ink levels at the MAX_LEVEL
+	//   This is done to make it actually stop the ink from 'overflowing'
+	//   its container. It ensures that MAX_LEVEL is the actual max level
+	// ----------------------------------------------------------
     if (blueLevel < MAX_LEVEL) {
-      if (MAX_LEVEL - blueLevel <= 10) {
+      if (MAX_LEVEL - blueLevel <= REFILL_INK) {
         blueLevel += MAX_LEVEL - blueLevel;
       } else {
         blueLevel += REFILL_INK;
       }
-      printf("Blue ink refilled to %d\n", blueLevel); // Optional for visual output
+      printf("Blue ink refilled to %d\n", blueLevel);
     }
   }
 }
