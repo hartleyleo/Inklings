@@ -123,47 +123,30 @@ void displayStatePane(void) {
 //------------------------------------------------------------------------
 // You probably want to edit these...
 bool acquireRedInk(int theRed) {
-
-  // Lock the respective ink
-  redLock.lock();
-  bool ok = false;
-
-  if (redLevel >= theRed) {
-    redLevel -= theRed;
-    ok = true;
-  }
-
-  redLock.unlock();
-  return ok;
+    std::lock_guard<std::mutex> lock(redLock);
+    if (redLevel >= theRed) {
+        redLevel -= theRed;
+        return true;
+    }
+    return false;
 }
 
 bool acquireGreenInk(int theGreen) {
-
-  // Lock the respective ink
-  greenLock.lock();
-  bool ok = false;
-
-	if (greenLevel >= theGreen) {
-		greenLevel -= theGreen;
-		ok = true;
-	}
-
-  greenLock.unlock();
-	return false;
+    std::lock_guard<std::mutex> lock(greenLock);
+    if (greenLevel >= theGreen) {
+        greenLevel -= theGreen;
+        return true;
+    }
+    return false;
 }
 
 bool acquireBlueInk(int theBlue) {
-  // Lock the respective ink
-  blueLock.lock();
-  bool ok = false;
-
-	if (blueLevel >= theBlue) {
-		blueLevel -= theBlue;
-		ok = true;
-	}
-  
-  blueLock.unlock();
-	return false;
+    std::lock_guard<std::mutex> lock(blueLock);
+    if (blueLevel >= theBlue) {
+        blueLevel -= theBlue;
+        return true;
+    }
+    return false;
 }
 
 
@@ -174,56 +157,39 @@ bool acquireBlueInk(int theBlue) {
 //------------------------------------------------------------------------
 // You probably want to edit these...
 bool refillRedInk(int theRed) {
-  bool ok = false;
+    std::lock_guard<std::mutex> lock(ink_mutex);
 
-  // Lock the mutex before accessing shared ink levels
-  ink_mutex.lock();
-
-  if (redLevel + theRed <= MAX_LEVEL) {
-    redLevel += theRed;
-    ok = true;
-  }
-
-  // Unlock the mutex after modifications
-  ink_mutex.unlock();
-
-  return ok;
+    if (redLevel + theRed <= MAX_LEVEL) {
+        redLevel += theRed;
+        return true;
+    } else {
+        redLevel = MAX_LEVEL;  // Cap the ink level at MAX_LEVEL
+        return false;
+    }
 }
-
 bool refillGreenInk(int theGreen) {
-  bool ok = false;
+    std::lock_guard<std::mutex> lock(ink_mutex);
 
-  // Lock the mutex before accessing shared ink levels
-  ink_mutex.lock();
-
-  if (greenLevel + theGreen <= MAX_LEVEL) {
-    greenLevel += theGreen;
-    ok = true;
-  }
-
-  // Unlock the mutex after modifications
-  ink_mutex.unlock();
-
-  return ok;
+    if (greenLevel + theGreen <= MAX_LEVEL) {
+        greenLevel += theGreen;
+        return true;
+    } else {
+        greenLevel = MAX_LEVEL;  // Cap the ink level at MAX_LEVEL
+        return false;
+    }
 }
 
 bool refillBlueInk(int theBlue) {
-  bool ok = false;
+    std::lock_guard<std::mutex> lock(ink_mutex);
 
-  // Lock the mutex before accessing shared ink levels
-  ink_mutex.lock();
-
-  if (blueLevel + theBlue <= MAX_LEVEL) {
-    blueLevel += theBlue;
-    ok = true;
-  }
-
-  // Unlock the mutex after modifications
-  ink_mutex.unlock();
-
-  return ok;
+    if (blueLevel + theBlue <= MAX_LEVEL) {
+        blueLevel += theBlue;
+        return true;
+    } else {
+        blueLevel = MAX_LEVEL;  // Cap the ink level at MAX_LEVEL
+        return false;
+    }
 }
-
 //------------------------------------------------------------------------
 //	You shouldn't have to touch this one.  Definitely if you do not
 //	add the "producer" threads, and probably not even if you do.

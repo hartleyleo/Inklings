@@ -6,7 +6,7 @@ Prototyping First Approach
 
 ### Parts Implemented First
 
-*   Created the Logging helper functions first and created logs.cpp
+*   Created the basic structure of the program, including the main function and the necessary header files.
    
 *   Implemented the creation of producer threads for each ink color (red, green, blue).
    
